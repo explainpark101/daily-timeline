@@ -871,8 +871,8 @@ export default function App() {
                   
                   {/* 타임라인 헤더 (날짜) */}
                   <div className="flex border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-slate-50 dark:bg-slate-800 z-10">
-                    <div className="w-48 shrink-0 border-r border-slate-200 dark:border-slate-700 p-3 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800">
-                      일정 명
+                    <div className="w-48 shrink-0 border-r border-slate-200 dark:border-slate-700 p-3 flex items-center text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800">
+                      <span className="leading-normal pb-0.5">일정 명</span>
                     </div>
                     {timelineData.days.map((day, idx) => {
                       const isToday = day.toISOString().split('T')[0] === getTodayStr();
@@ -886,8 +886,8 @@ export default function App() {
                               : (isWeekend ? 'bg-slate-50/50 dark:bg-slate-800/50 text-red-400 dark:text-red-400' : 'text-slate-600 dark:text-slate-400')}
                           `}
                         >
-                          <span className="text-[10px] uppercase">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]}</span>
-                          <span className="text-sm">{formatDate(day)}</span>
+                          <span className="text-[10px] uppercase leading-normal pb-0.5">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day.getDay()]}</span>
+                          <span className="text-sm leading-normal pb-0.5">{formatDate(day)}</span>
                         </div>
                       );
                     })}
@@ -910,7 +910,7 @@ export default function App() {
                           <div key={task.id} className="flex border-b border-slate-100 dark:border-slate-700 relative group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                             {/* 왼쪽 일정 이름 */}
                             <div className="w-48 shrink-0 border-r border-slate-200 dark:border-slate-700 p-3 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-700/50 z-10 flex items-center transition-colors">
-                              <span className={`text-sm truncate ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200 font-medium'}`}>
+                              <span className={`text-sm truncate leading-normal pb-0.5 ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200 font-medium'}`}>
                                 {task.title}
                               </span>
                             </div>
@@ -931,7 +931,7 @@ export default function App() {
                                 }}
                                 title={`${task.title} (${task.startDate} ~ ${task.dueDate})`}
                               >
-                                <span className="text-white text-xs font-semibold truncate">
+                                <span className="text-white text-xs font-semibold truncate leading-normal pb-0.5">
                                   {durationDays}일
                                 </span>
                               </div>
@@ -949,7 +949,7 @@ export default function App() {
                           left: `${192 + (getDaysBetween(timelineData.minDate, getTodayStr()) * 64) + 32}px`
                         }}
                       >
-                        <div className="absolute -top-3 -translate-x-1/2 bg-blue-500 dark:bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                        <div className="absolute -top-3.5 -translate-x-1/2 bg-blue-500 dark:bg-blue-600 text-white text-[10px] px-2 pt-0.5 pb-1 rounded-full whitespace-nowrap shadow-sm leading-relaxed">
                           오늘
                         </div>
                       </div>
