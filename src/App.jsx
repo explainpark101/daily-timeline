@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, AlignLeft, Sun, Moon, ChevronUp, ChevronDown, Download, Upload, Share2, Zap } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, AlignLeft, Sun, Moon, ChevronUp, ChevronDown, Download, Upload, Share2, Zap, Edit2, Save, X, Image as ImageIcon } from 'lucide-react';
 
 // --- 유틸리티 및 IndexedDB 설정 ---
 const DB_NAME = 'TimelineAppDB';
@@ -99,6 +99,12 @@ export default function App() {
   
   // 퀵 툴바 상태
   const [isQuickToolsOpen, setIsQuickToolsOpen] = useState(false);
+
+  // 일정 수정 상태
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editDue, setEditDue] = useState('');
 
   const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-red-500', 'bg-orange-500', 'bg-teal-500', 'bg-pink-500'];
 
@@ -213,6 +219,79 @@ export default function App() {
       setTasks(tasks.map(t => t.id === id ? updatedTask : t));
     } catch (error) {
       console.error("일정 상태 변경 실패:", error);
+    }
+  };
+
+  const startEdit = (task) => {
+    setEditingId(task.id);
+    setEditTitle(task.title);
+    setEditStart(task.startDate);
+    setEditDue(task.dueDate);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async (id) => {
+    if (!editTitle.trim()) return;
+    if (new Date(editStart) > new Date(editDue)) {
+      alert('시작일은 마감일보다 이전이어야 합니다.');
+      return;
+    }
+    const targetTask = tasks.find(t => t.id === id);
+    const updatedTask = { ...targetTask, title: editTitle, startDate: editStart, dueDate: editDue };
+    try {
+      await saveTaskToDB(updatedTask);
+      setTasks(tasks.map(t => t.id === id ? updatedTask : t));
+      setEditingId(null);
+    } catch (error) {
+      console.error("일정 수정 실패:", error);
+    }
+  };
+
+  const copyTimelineAsImage = async () => {
+    try {
+      let html2canvas = window.html2canvas;
+      if (!html2canvas) {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+        html2canvas = window.html2canvas;
+      }
+
+      const element = document.getElementById('timeline-chart-content');
+      if (!element) return;
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff'
+      });
+
+      canvas.toBlob(async (blob) => {
+        try {
+          const item = new window.ClipboardItem({ "image/png": blob });
+          await navigator.clipboard.write([item]);
+          alert('타임라인 이미지가 클립보드에 복사되었습니다.');
+        } catch (err) {
+          console.warn('클립보드 직접 쓰기 실패, 다운로드로 대체:', err);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'timeline.png';
+          a.click();
+          URL.revokeObjectURL(url);
+          alert('클립보드 권한 제한으로 인해 이미지 파일로 다운로드되었습니다.');
+        }
+      }, "image/png");
+    } catch (error) {
+      console.error("이미지 복사 실패:", error);
+      alert("이미지 캡처 또는 복사에 실패했습니다.");
     }
   };
 
@@ -480,9 +559,13 @@ export default function App() {
                           <span className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">진행 기간 (시작일 기준)</span>
                           <div className="flex flex-wrap gap-1.5">
                             <button type="button" onClick={() => setQuickDuration(0)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">당일</button>
-                            <button type="button" onClick={() => setQuickDuration(2)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">3일</button>
+                            <button type="button" onClick={() => setQuickDuration(1)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">이틀</button>
+                            <button type="button" onClick={() => setQuickDuration(2)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">사흘</button>
+                            <button type="button" onClick={() => setQuickDuration(3)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">나흘</button>
                             <button type="button" onClick={() => setQuickDuration(6)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">1주일</button>
                             <button type="button" onClick={() => setQuickDuration(13)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">2주일</button>
+                            <button type="button" onClick={() => setQuickDuration(20)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">3주</button>
+                            <button type="button" onClick={() => setQuickDuration(27)} className="px-2 py-1 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">4주</button>
                           </div>
                         </div>
                       </div>
@@ -518,59 +601,99 @@ export default function App() {
                             : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-500 shadow-sm'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start space-x-3 overflow-hidden">
-                            <button 
-                              onClick={() => toggleTaskStatus(task.id)}
-                              className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
-                            >
-                              {task.completed ? (
-                                <CheckCircle2 className="w-5 h-5 text-green-500 dark:text-green-400" />
-                              ) : (
-                                <Circle className="w-5 h-5" />
-                              )}
-                            </button>
-                            <div className="min-w-0">
-                              <h3 className={`font-medium truncate ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}`}>
-                                {task.title}
-                              </h3>
-                              <div className="flex items-center mt-1 text-xs text-slate-500 dark:text-slate-400 space-x-2">
-                                <span className="flex items-center">
-                                  <Clock className="w-3 h-3 mr-1" />
-                                  {task.startDate} ~ {task.dueDate}
-                                </span>
-                                <span className={`w-2 h-2 rounded-full ${task.color}`}></span>
+                        {editingId === task.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="w-full px-2 py-1 text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <div className="flex space-x-2">
+                              <input
+                                type="date"
+                                value={editStart}
+                                onChange={(e) => setEditStart(e.target.value)}
+                                className="w-1/2 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <input
+                                type="date"
+                                value={editDue}
+                                onChange={(e) => setEditDue(e.target.value)}
+                                className="w-1/2 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div className="flex justify-end space-x-1 mt-2">
+                              <button onClick={() => saveEdit(task.id)} className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-slate-700 rounded transition-colors" title="저장">
+                                <Save className="w-4 h-4" />
+                              </button>
+                              <button onClick={cancelEdit} className="p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors" title="취소">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3 overflow-hidden">
+                              <button 
+                                onClick={() => toggleTaskStatus(task.id)}
+                                className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                              >
+                                {task.completed ? (
+                                  <CheckCircle2 className="w-5 h-5 text-green-500 dark:text-green-400" />
+                                ) : (
+                                  <Circle className="w-5 h-5" />
+                                )}
+                              </button>
+                              <div className="min-w-0">
+                                <h3 className={`font-medium truncate ${task.completed ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}`}>
+                                  {task.title}
+                                </h3>
+                                <div className="flex items-center mt-1 text-xs text-slate-500 dark:text-slate-400 space-x-2">
+                                  <span className="flex items-center">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    {task.startDate} ~ {task.dueDate}
+                                  </span>
+                                  <span className={`w-2 h-2 rounded-full ${task.color}`}></span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="shrink-0 flex items-center ml-2 space-x-1">
-                            <div className="flex flex-col">
+                            <div className="shrink-0 flex items-center ml-2 space-x-1">
                               <button 
-                                onClick={() => moveTask(index, 'up')} 
-                                disabled={index === 0} 
-                                className="text-slate-400 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-400 p-0.5"
-                                title="위로 이동"
+                                onClick={() => startEdit(task)}
+                                className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1"
+                                title="수정"
                               >
-                                <ChevronUp className="w-4 h-4" />
+                                <Edit2 className="w-4 h-4" />
                               </button>
+                              <div className="flex flex-col border-l border-slate-200 dark:border-slate-600 pl-1 ml-1">
+                                <button 
+                                  onClick={() => moveTask(index, 'up')} 
+                                  disabled={index === 0} 
+                                  className="text-slate-400 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-400 p-0.5"
+                                  title="위로 이동"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => moveTask(index, 'down')} 
+                                  disabled={index === tasks.length - 1} 
+                                  className="text-slate-400 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-400 p-0.5"
+                                  title="아래로 이동"
+                                >
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
+                              </div>
                               <button 
-                                onClick={() => moveTask(index, 'down')} 
-                                disabled={index === tasks.length - 1} 
-                                className="text-slate-400 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-400 p-0.5"
-                                title="아래로 이동"
+                                onClick={() => deleteTask(task.id)}
+                                className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 ml-1"
+                                title="삭제"
                               >
-                                <ChevronDown className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
-                            <button 
-                              onClick={() => deleteTask(task.id)}
-                              className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 ml-1"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -580,13 +703,23 @@ export default function App() {
 
             {/* 오른쪽 패널: 타임라인 뷰 */}
             <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 overflow-hidden flex flex-col transition-colors">
-              <h2 className="text-lg font-semibold mb-4 flex items-center text-slate-700 dark:text-slate-200 shrink-0">
-                <Calendar className="w-5 h-5 mr-2 text-blue-500 dark:text-blue-400" />
-                타임라인
-              </h2>
+              <div className="flex justify-between items-center mb-4 shrink-0">
+                <h2 className="text-lg font-semibold flex items-center text-slate-700 dark:text-slate-200">
+                  <Calendar className="w-5 h-5 mr-2 text-blue-500 dark:text-blue-400" />
+                  타임라인
+                </h2>
+                <button
+                  onClick={copyTimelineAsImage}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors"
+                  title="타임라인을 이미지로 복사"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>이미지 복사</span>
+                </button>
+              </div>
               
               <div className="relative flex-1 overflow-x-auto overflow-y-auto border border-slate-100 dark:border-slate-700 rounded-lg custom-scrollbar">
-                <div className="min-w-max">
+                <div id="timeline-chart-content" className="min-w-max bg-white dark:bg-slate-800 pb-2">
                   
                   {/* 타임라인 헤더 (날짜) */}
                   <div className="flex border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-slate-50 dark:bg-slate-800 z-10">
