@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, AlignLeft, Sun, Moon, ChevronUp, ChevronDown, Download, Upload, Share2, Zap, Edit2, Save, X, Image as ImageIcon } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, AlignLeft, Sun, Moon, ChevronUp, ChevronDown, Download, Upload, Share2, Zap, Edit2, Save, X, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // --- 유틸리티 및 IndexedDB 설정 ---
 const DB_NAME = 'TimelineAppDB';
@@ -84,8 +84,97 @@ const addDays = (date, days) => {
 };
 const getTodayStr = () => {
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
+const formatToYYYYMMDD = (year, month, day) => {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
+// --- 커스텀 DatePicker 모달 컴포넌트 ---
+const DatePickerModal = ({ isOpen, onClose, onSelect, initialDate }) => {
+  const [currentView, setCurrentView] = useState(new Date());
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentView(initialDate ? parseDate(initialDate) : new Date());
+    }
+  }, [isOpen, initialDate]);
+
+  if (!isOpen) return null;
+
+  const year = currentView.getFullYear();
+  const month = currentView.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+  const handlePrevMonth = () => setCurrentView(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentView(new Date(year, month + 1, 1));
+  const handleSelect = (day) => {
+    if (!day) return;
+    onSelect(formatToYYYYMMDD(year, month, day));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-4 w-full max-w-[300px] border border-slate-200 dark:border-slate-700">
+        <div className="flex justify-between items-center mb-4">
+          <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 transition-colors">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {year}년 {month + 1}월
+          </span>
+          <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 transition-colors">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center mb-2">
+          {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+            <div key={d} className={`text-xs font-medium ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500 dark:text-slate-400'}`}>
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center">
+          {days.map((day, idx) => {
+            const isToday = day && formatToYYYYMMDD(year, month, day) === getTodayStr();
+            const isSelected = day && formatToYYYYMMDD(year, month, day) === initialDate;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSelect(day)}
+                disabled={!day}
+                className={`
+                  h-8 w-8 mx-auto rounded-full flex items-center justify-center text-sm transition-colors
+                  ${!day ? 'invisible' : ''}
+                  ${isSelected ? 'bg-blue-600 text-white font-bold shadow-sm' : 
+                    isToday ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold hover:bg-blue-200 dark:hover:bg-blue-800' : 
+                    'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'}
+                `}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+            취소
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -105,6 +194,9 @@ export default function App() {
   const [editTitle, setEditTitle] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editDue, setEditDue] = useState('');
+
+  // DatePicker 모달 상태
+  const [datePickerConfig, setDatePickerConfig] = useState({ isOpen: false, field: null, date: '' });
 
   const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-red-500', 'bg-orange-500', 'bg-teal-500', 'bg-pink-500'];
 
@@ -250,48 +342,68 @@ export default function App() {
     }
   };
 
+  // 공통 이미지 생성 로직 (oklch 등 최신 CSS 지원을 위해 html2canvas-pro 사용)
+  const getTimelineBlob = async () => {
+    let h2c = window.html2canvas;
+    // 기존에 로드된 html2canvas가 pro 버전이 아닐 수 있으므로 강제 로드 확인
+    if (!h2c || !window.__isH2cPro) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.3/dist/html2canvas-pro.min.js';
+      await new Promise((resolve, reject) => {
+        script.onload = () => {
+          window.__isH2cPro = true;
+          resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      h2c = window.html2canvas;
+    }
+
+    const element = document.getElementById('timeline-chart-content');
+    if (!element) throw new Error("타임라인 요소를 찾을 수 없습니다.");
+
+    const canvas = await h2c(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: isDarkMode ? '#1e293b' : '#ffffff'
+    });
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    });
+  };
+
+  // 이미지 클립보드 복사
   const copyTimelineAsImage = async () => {
     try {
-      let html2canvas = window.html2canvas;
-      if (!html2canvas) {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-        html2canvas = window.html2canvas;
-      }
+      const blob = await getTimelineBlob();
+      if (!blob) throw new Error("이미지 생성에 실패했습니다.");
 
-      const element = document.getElementById('timeline-chart-content');
-      if (!element) return;
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: isDarkMode ? '#1e293b' : '#ffffff'
-      });
-
-      canvas.toBlob(async (blob) => {
-        try {
-          const item = new window.ClipboardItem({ "image/png": blob });
-          await navigator.clipboard.write([item]);
-          alert('타임라인 이미지가 클립보드에 복사되었습니다.');
-        } catch (err) {
-          console.warn('클립보드 직접 쓰기 실패, 다운로드로 대체:', err);
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'timeline.png';
-          a.click();
-          URL.revokeObjectURL(url);
-          alert('클립보드 권한 제한으로 인해 이미지 파일로 다운로드되었습니다.');
-        }
-      }, "image/png");
+      const item = new window.ClipboardItem({ "image/png": blob });
+      await navigator.clipboard.write([item]);
+      alert('타임라인 이미지가 클립보드에 복사되었습니다.');
     } catch (error) {
       console.error("이미지 복사 실패:", error);
-      alert("이미지 캡처 또는 복사에 실패했습니다.");
+      alert('클립보드 권한이 제한되어 있거나 지원하지 않는 환경입니다. 우측의 "이미지 저장" 버튼을 이용해 주십시오.');
+    }
+  };
+
+  // 이미지 파일 저장 다운로드
+  const saveTimelineAsImage = async () => {
+    try {
+      const blob = await getTimelineBlob();
+      if (!blob) throw new Error("이미지 생성에 실패했습니다.");
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `timeline_${getTodayStr()}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("이미지 저장 실패:", error);
+      alert("이미지 캡처 또는 저장에 실패했습니다.");
     }
   };
 
@@ -387,6 +499,26 @@ export default function App() {
       console.error("공유 링크 생성 실패:", err);
       alert('공유 링크 생성 중 오류가 발생했습니다.');
     }
+  };
+
+  // 모달 열기 핸들러
+  const openDatePicker = (field, currentDate) => {
+    setDatePickerConfig({ isOpen: true, field, date: currentDate });
+  };
+
+  // 모달 날짜 선택 핸들러
+  const handleDateSelect = (selectedDate) => {
+    if (datePickerConfig.field === 'newStart') {
+      setNewTaskStart(selectedDate);
+      if (new Date(selectedDate) > new Date(newTaskDue)) setNewTaskDue(selectedDate);
+    } else if (datePickerConfig.field === 'newDue') {
+      setNewTaskDue(selectedDate);
+    } else if (datePickerConfig.field === 'editStart') {
+      setEditStart(selectedDate);
+    } else if (datePickerConfig.field === 'editDue') {
+      setEditDue(selectedDate);
+    }
+    setDatePickerConfig({ isOpen: false, field: null, date: '' });
   };
 
   // 퀵 툴바 날짜 설정 로직
@@ -512,23 +644,25 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-3 relative">
                     <div>
                       <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">시작일</label>
-                      <input
-                        type="date"
-                        value={newTaskStart}
-                        onChange={(e) => setNewTaskStart(e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        required
-                      />
+                      <button
+                        type="button"
+                        onClick={() => openDatePicker('newStart', newTaskStart)}
+                        className="w-full px-3 py-2 text-left bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm flex justify-between items-center transition-shadow"
+                      >
+                        <span>{newTaskStart}</span>
+                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                      </button>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">마감일</label>
-                      <input
-                        type="date"
-                        value={newTaskDue}
-                        onChange={(e) => setNewTaskDue(e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        required
-                      />
+                      <button
+                        type="button"
+                        onClick={() => openDatePicker('newDue', newTaskDue)}
+                        className="w-full px-3 py-2 text-left bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm flex justify-between items-center transition-shadow"
+                      >
+                        <span>{newTaskDue}</span>
+                        <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                      </button>
                     </div>
                   </div>
 
@@ -539,9 +673,9 @@ export default function App() {
                       onClick={() => setIsQuickToolsOpen(!isQuickToolsOpen)}
                       className="flex items-center space-x-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                     >
-                      <Zap className="w-3.5 h-3.5" />
+                      <Zap className="w-3.5 h-3.5 shrink-0" />
                       <span>날짜 빠른 설정</span>
-                      {isQuickToolsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {isQuickToolsOpen ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
                     </button>
                     
                     {isQuickToolsOpen && (
@@ -576,7 +710,7 @@ export default function App() {
                     type="submit"
                     className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center mt-2"
                   >
-                    <Plus className="w-4 h-4 mr-1" />
+                    <Plus className="w-4 h-4 mr-1 shrink-0" />
                     일정 등록
                   </button>
                 </form>
@@ -610,25 +744,29 @@ export default function App() {
                               className="w-full px-2 py-1 text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="flex space-x-2">
-                              <input
-                                type="date"
-                                value={editStart}
-                                onChange={(e) => setEditStart(e.target.value)}
-                                className="w-1/2 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              <input
-                                type="date"
-                                value={editDue}
-                                onChange={(e) => setEditDue(e.target.value)}
-                                className="w-1/2 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
+                              <button
+                                type="button"
+                                onClick={() => openDatePicker('editStart', editStart)}
+                                className="w-1/2 px-2 py-1 text-xs text-left bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500 flex justify-between items-center"
+                              >
+                                <span>{editStart}</span>
+                                <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDatePicker('editDue', editDue)}
+                                className="w-1/2 px-2 py-1 text-xs text-left bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500 flex justify-between items-center"
+                              >
+                                <span>{editDue}</span>
+                                <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              </button>
                             </div>
                             <div className="flex justify-end space-x-1 mt-2">
                               <button onClick={() => saveEdit(task.id)} className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-slate-700 rounded transition-colors" title="저장">
-                                <Save className="w-4 h-4" />
+                                <Save className="w-4 h-4 shrink-0" />
                               </button>
                               <button onClick={cancelEdit} className="p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors" title="취소">
-                                <X className="w-4 h-4" />
+                                <X className="w-4 h-4 shrink-0" />
                               </button>
                             </div>
                           </div>
@@ -651,10 +789,10 @@ export default function App() {
                                 </h3>
                                 <div className="flex items-center mt-1 text-xs text-slate-500 dark:text-slate-400 space-x-2">
                                   <span className="flex items-center">
-                                    <Clock className="w-3 h-3 mr-1" />
+                                    <Clock className="w-3 h-3 mr-1 shrink-0" />
                                     {task.startDate} ~ {task.dueDate}
                                   </span>
-                                  <span className={`w-2 h-2 rounded-full ${task.color}`}></span>
+                                  <span className={`w-2 h-2 shrink-0 rounded-full ${task.color}`}></span>
                                 </div>
                               </div>
                             </div>
@@ -708,14 +846,24 @@ export default function App() {
                   <Calendar className="w-5 h-5 mr-2 text-blue-500 dark:text-blue-400" />
                   타임라인
                 </h2>
-                <button
-                  onClick={copyTimelineAsImage}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors"
-                  title="타임라인을 이미지로 복사"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span>이미지 복사</span>
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={copyTimelineAsImage}
+                    className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors"
+                    title="타임라인을 이미지로 복사"
+                  >
+                    <ImageIcon className="w-4 h-4 shrink-0" />
+                    <span>이미지 복사</span>
+                  </button>
+                  <button
+                    onClick={saveTimelineAsImage}
+                    className="flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors shadow-sm"
+                    title="타임라인을 파일로 저장"
+                  >
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span>이미지 저장</span>
+                  </button>
+                </div>
               </div>
               
               <div className="relative flex-1 overflow-x-auto overflow-y-auto border border-slate-100 dark:border-slate-700 rounded-lg custom-scrollbar">
@@ -814,6 +962,14 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* 커스텀 DatePicker 모달 렌더링 영역 */}
+        <DatePickerModal 
+          isOpen={datePickerConfig.isOpen} 
+          onClose={() => setDatePickerConfig({ ...datePickerConfig, isOpen: false })}
+          onSelect={handleDateSelect}
+          initialDate={datePickerConfig.date}
+        />
 
         {/* 스크롤바 커스텀 스타일 (다크모드 대응 포함) */}
         <style dangerouslySetInnerHTML={{__html: `
